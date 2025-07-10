@@ -21,6 +21,8 @@ import androidx.camera.core.ExperimentalLensFacing
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.MeteringPoint
 import androidx.camera.core.MeteringPointFactory
@@ -71,6 +73,7 @@ class MobileScanner(
     private var camera: Camera? = null
     private var cameraSelector: CameraSelector? = null
     private var preview: Preview? = null
+    private var imageCapture: ImageCapture? = null
     private var surfaceProducer: TextureRegistry.SurfaceProducer? = null
     private var scanner: BarcodeScanner? = null
     private var lastScanned: List<String?>? = null
@@ -461,12 +464,17 @@ class MobileScanner(
 
             val analysis = analysisBuilder.build().apply { setAnalyzer(analysisExecutor, captureOutput) }
 
+            val imageCaptureBuilder = ImageCapture.Builder()
+            imageCaptureBuilder.setResolutionSelector(selectorBuilder.build())
+            imageCapture = imageCaptureBuilder.build()
+
             try {
                 camera = cameraProvider?.bindToLifecycle(
                     activity as LifecycleOwner,
                     cameraPosition,
                     preview,
-                    analysis
+                    analysis,
+                    imageCapture
                 )
                 cameraSelector = cameraPosition
             } catch(_: Exception) {
@@ -672,6 +680,49 @@ class MobileScanner(
         }.addOnCompleteListener {
             barcodeScanner.close()
         }
+    }
+
+    /**
+     * Take a picture using the camera.
+     */
+    fun takePicture(
+        onSuccess: TakePictureSuccessCallback,
+        onError: TakePictureErrorCallback
+    ) {
+        if (imageCapture == null) {
+            onError(ImageCaptureNotAvailable())
+            return
+        }
+
+        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(
+            activity.applicationContext.cacheDir.resolve("mobile_scanner_${System.currentTimeMillis()}.jpg")
+        ).build()
+
+        imageCapture?.takePicture(
+            outputFileOptions,
+            ContextCompat.getMainExecutor(activity),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    try {
+                        val file = output.savedUri?.let { uri ->
+                            activity.contentResolver.openInputStream(uri)?.readBytes()
+                        }
+                        
+                        if (file != null) {
+                            onSuccess(file)
+                        } else {
+                            onError(ImageCaptureReadError())
+                        }
+                    } catch (e: Exception) {
+                        onError(ImageCaptureProcessError())
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    onError(ImageCaptureFailed())
+                }
+            }
+        )
     }
 
     /**

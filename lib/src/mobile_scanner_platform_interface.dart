@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/widgets.dart';
 import 'package:mobile_scanner/src/enums/barcode_format.dart';
 import 'package:mobile_scanner/src/enums/camera_lens_type.dart';
@@ -130,6 +132,15 @@ abstract class MobileScannerPlatform extends PlatformInterface {
   /// This method can be called before starting the scanner.
   Future<Set<CameraLensType>> getSupportedLenses() {
     throw UnimplementedError('getSupportedLenses() has not been implemented.');
+  }
+
+  /// Take a picture using the camera.
+  ///
+  /// Returns the image as a [Uint8List] in JPEG format.
+  ///
+  /// Throws an exception if the camera is not started or if taking a picture fails.
+  Future<Uint8List> takePicture() {
+    throw UnimplementedError('takePicture() has not been implemented.');
   }
 
   /// Update the scan window to the given [window] rectangle.
